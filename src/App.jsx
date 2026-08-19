@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { syncRangeLocation } from './locationSync';
 
 const icon = code => code === 0 ? '☀️' : code <= 3 ? '⛅' : code <= 48 ? '🌫️' : code <= 67 ? '🌧️' : code <= 77 ? '❄️' : code <= 86 ? '🌦️' : '⛈️';
 const api = async (url, options) => { const r = await fetch(url, options); const body = r.status === 204 ? null : await r.json(); if (!r.ok) throw new Error(body?.error || 'Request failed.'); return body; };
@@ -11,7 +12,15 @@ export default function App() {
   const [tab, setTab] = useState('weather');
   const loadRecords = () => api('/api/records').then(setRecords).catch(e => setError(e.message));
   useEffect(() => { search('Toronto'); loadRecords(); }, []);
-  async function search(location = query, gps) { setLoading(true); setError(''); try { setWeather(await api(gps ? `/api/weather?lat=${gps.latitude}&lon=${gps.longitude}` : `/api/weather?location=${encodeURIComponent(location)}`)); } catch (e) { setError(e.message); } finally { setLoading(false); } }
+  async function search(location = query, gps) {
+    setLoading(true); setError('');
+    try {
+      const result = await api(gps ? `/api/weather?lat=${gps.latitude}&lon=${gps.longitude}` : `/api/weather?location=${encodeURIComponent(location)}`);
+      setWeather(result);
+      setRange(prev => ({ ...prev, location: syncRangeLocation(prev.location, result.location) }));
+      if (!gps) setQuery(location);
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
+  }
   function currentLocation() { setError(''); if (!navigator.geolocation) return setError('Geolocation is not supported by this browser.'); navigator.geolocation.getCurrentPosition(p => search('', p.coords), e => setError(e.code === 1 ? 'Location permission was denied. Search for a city instead.' : 'Your location could not be detected.')); }
   async function save(e) { e.preventDefault(); setLoading(true); setError(''); try { await api('/api/records', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(range) }); await loadRecords(); setTab('saved'); } catch(e) { setError(e.message); } finally { setLoading(false); } }
   async function edit(r) { const notes = prompt('Update notes:', r.notes || ''); if (notes === null) return; try { await api(`/api/records/${r.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({notes}) }); loadRecords(); } catch(e) { setError(e.message); } }

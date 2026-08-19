@@ -1,5 +1,6 @@
 const GEO = 'https://geocoding-api.open-meteo.com/v1/search';
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
+const OSM = 'https://nominatim.openstreetmap.org/search';
 
 export function validDateRange(startDate, endDate) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate || '') || !/^\d{4}-\d{2}-\d{2}$/.test(endDate || '')) return false;
@@ -9,14 +10,53 @@ export function validDateRange(startDate, endDate) {
   return !Number.isNaN(days) && days >= 0 && days <= 15;
 }
 
+export function looksLikePostalCode(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return false;
+  const compact = text.replace(/\s+/g, '');
+  return /^[A-Za-z]\d[A-Za-z]$/i.test(text)
+    || /^[A-Za-z]\d[A-Za-z]\d[A-Za-z]\d$/i.test(compact)
+    || /^[A-Za-z]{2}\d[A-Za-z\d]?\d[A-Za-z]{2}$/i.test(compact)
+    || /^\d{5}$/i.test(text)
+    || /^\d{5}-\d{4}$/i.test(text);
+}
+
+async function geocodeFallback(location) {
+  const query = String(location).trim();
+  const url = `${OSM}?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`;
+  const response = await fetch(url, {
+    headers: { 'User-Agent': 'WeatherWise/1.0 (assessment)', 'Accept-Language': 'en' },
+  });
+  if (!response.ok) throw Object.assign(new Error('Location service is temporarily unavailable.'), { status: 502 });
+  const data = await response.json();
+  const match = data?.[0];
+  if (!match) throw Object.assign(new Error(`We could not find “${query}”. Check the spelling and try again.`), { status: 404 });
+
+  return {
+    name: match.address?.city || match.address?.town || match.address?.village || match.name || query,
+    country: match.address?.country || '',
+    admin1: match.address?.state || match.address?.province || match.address?.county || '',
+    latitude: Number(match.lat),
+    longitude: Number(match.lon),
+    timezone: 'auto',
+  };
+}
+
 export async function geocode(location) {
   if (!location || location.trim().length < 2) throw Object.assign(new Error('Enter a valid city, town, postal code, or landmark.'), { status: 400 });
-  const url = `${GEO}?name=${encodeURIComponent(location.trim())}&count=1&language=en&format=json`;
+  const trimmed = location.trim();
+  const url = `${GEO}?name=${encodeURIComponent(trimmed)}&count=1&language=en&format=json`;
   const response = await fetch(url);
   if (!response.ok) throw Object.assign(new Error('Location service is temporarily unavailable.'), { status: 502 });
   const data = await response.json();
-  if (!data.results?.length) throw Object.assign(new Error(`We could not find “${location}”. Check the spelling and try again.`), { status: 404 });
-  return data.results[0];
+
+  if (data.results?.length) return data.results[0];
+
+  if (looksLikePostalCode(trimmed)) {
+    return geocodeFallback(trimmed);
+  }
+
+  throw Object.assign(new Error(`We could not find “${location}”. Check the spelling and try again.`), { status: 404 });
 }
 
 export async function reverseGeocode(latitude, longitude) {
