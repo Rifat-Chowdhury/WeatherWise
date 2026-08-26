@@ -79,7 +79,7 @@ The SQLite database is created automatically at `data/weather.db` and is exclude
 Example create body:
 
 ```json
-{"location":"Toronto","startDate":"2026-08-26","endDate":"2026-08-30","notes":"Weekend trip"}
+{"location":"Toronto","startDate":"2026-08-26","endDate":"2026-08-30","Forecast Summary":"Average Conditions","notes":"Weekend trip"}
 ```
 
 ## Design decisions
