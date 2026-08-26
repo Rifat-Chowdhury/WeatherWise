@@ -24,8 +24,8 @@ export function createRecord(input, weather) {
   const result = db.prepare('INSERT INTO weather_requests (location, latitude, longitude, start_date, end_date, weather_json, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(input.location, weather.location.latitude, weather.location.longitude, input.startDate, input.endDate, JSON.stringify(weather), input.notes || '', now, now);
   return getRecord(Number(result.lastInsertRowid));
 }
-export function updateRecord(id, notes) {
-  const result = db.prepare('UPDATE weather_requests SET notes = ?, updated_at = ? WHERE id = ?').run(notes, new Date().toISOString(), id);
+export function updateRecord(id, input, weather) {
+  const result = db.prepare('UPDATE weather_requests SET start_date = ?, end_date = ?, weather_json = ?, notes = ?, updated_at = ? WHERE id = ?').run(input.startDate, input.endDate, JSON.stringify(weather), input.notes, new Date().toISOString(), id);
   return result.changes ? getRecord(id) : null;
 }
 export function deleteRecord(id) { return db.prepare('DELETE FROM weather_requests WHERE id = ?').run(id).changes > 0; }

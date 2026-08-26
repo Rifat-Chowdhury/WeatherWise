@@ -17,7 +17,7 @@ WeatherWise is a responsive weather application that searches real locations, re
 | Responsive web-first UI | CSS Grid/Flexbox, fluid type, breakpoints at 760px and 430px, overflow-safe table |
 | CREATE | Validates a real location and forecast date range, retrieves weather, saves to SQLite |
 | READ | List and individual-record REST endpoints |
-| UPDATE | Editable, length-limited notes field |
+| UPDATE | Editable, validated date range and length-limited notes |
 | DELETE | Confirmed deletion of saved records |
 | RESTful API | Express JSON endpoints with suitable HTTP methods/status codes |
 | Additional integration | OpenStreetMap link centered on selected coordinates |
@@ -71,7 +71,7 @@ The SQLite database is created automatically at `data/weather.db` and is exclude
 | POST | `/api/records` | Validate, retrieve, and save a date-range request |
 | GET | `/api/records` | List saved requests |
 | GET | `/api/records/:id` | Read one request including stored weather |
-| PATCH | `/api/records/:id` | Update editable notes |
+| PATCH | `/api/records/:id` | Update saved forecast dates and notes |
 | DELETE | `/api/records/:id` | Delete a request |
 | GET | `/api/export.csv` | Export saved requests as CSV |
 | GET | `/api/export.json` | Export saved requests as JSON |
@@ -79,14 +79,14 @@ The SQLite database is created automatically at `data/weather.db` and is exclude
 Example create body:
 
 ```json
-{"location":"Toronto","startDate":"2026-08-19","endDate":"2026-08-23","notes":"Weekend trip"}
+{"location":"Toronto","startDate":"2026-08-26","endDate":"2026-08-30","notes":"Weekend trip"}
 ```
 
 ## Design decisions
 
 - Forecast ranges are limited to today through 15 days ahead because this is forecast data, not historical data.
 - Weather snapshots are stored as JSON alongside searchable relational fields, combining structured persistence with reproducibility.
-- Notes are the safe editable field; changing a saved location or date range creates a new weather request so the stored snapshot remains internally consistent.
+- Saved requests allow date-range and notes edits, and date changes refresh the stored weather snapshot so summaries stay internally consistent.
 - No secret or API key is needed, making review and cloning straightforward.
 
 ## Demo checklist (1–2 minutes)
@@ -96,7 +96,7 @@ Example create body:
 3. Click **Use my location** and allow browser access.
 4. Open the OpenStreetMap link.
 5. Save a valid date-range request, then show it in **Saved requests**.
-6. Edit its notes, export CSV/JSON, then delete it.
+6. Edit its dates or notes, export CSV/JSON, then delete it.
 7. Briefly show `server/index.js`, `server/db.js`, and this requirement table.
 
 ## Attribution

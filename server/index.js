@@ -24,11 +24,27 @@ app.post('/api/records', asyncRoute(async (req, res) => {
   const weather = normalize(place, await getWeather(place, startDate, endDate));
   res.status(201).json(createRecord({ location: `${place.name}${place.country ? `, ${place.country}` : ''}`, startDate, endDate, notes: String(notes).slice(0, 300) }, weather));
 }));
-app.patch('/api/records/:id', (req, res) => {
-  if (typeof req.body.notes !== 'string') return res.status(400).json({ error: 'Notes must be text.' });
-  const record = updateRecord(Number(req.params.id), req.body.notes.trim().slice(0, 300));
-  return record ? res.json(record) : res.status(404).json({ error: 'Record not found.' });
-});
+app.patch('/api/records/:id', asyncRoute(async (req, res) => {
+  const existing = getRecord(Number(req.params.id));
+  if (!existing) return res.status(404).json({ error: 'Record not found.' });
+  const { startDate = existing.startDate, endDate = existing.endDate, notes = existing.notes ?? '' } = req.body;
+  if (typeof startDate !== 'string' || typeof endDate !== 'string') return res.status(400).json({ error: 'Dates must be provided as YYYY-MM-DD text.' });
+  if (typeof notes !== 'string') return res.status(400).json({ error: 'Notes must be text.' });
+  if (!validDateRange(startDate, endDate)) return res.status(400).json({ error: 'Use valid dates with the end on/after the start and a maximum range of 16 days.' });
+  const today = new Date().toISOString().slice(0, 10);
+  const max = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10);
+  if (startDate < today || endDate > max) return res.status(400).json({ error: `Forecast dates must be between ${today} and ${max}.` });
+  const place = {
+    name: existing.weather.location.name || existing.location,
+    admin1: existing.weather.location.region || '',
+    country: existing.weather.location.country || '',
+    latitude: existing.latitude,
+    longitude: existing.longitude,
+  };
+  const weather = normalize(place, await getWeather(place, startDate, endDate));
+  const record = updateRecord(existing.id, { startDate, endDate, notes: notes.trim().slice(0, 300) }, weather);
+  return res.json(record);
+}));
 app.delete('/api/records/:id', (req, res) => deleteRecord(Number(req.params.id)) ? res.status(204).end() : res.status(404).json({ error: 'Record not found.' }));
 app.get('/api/export.:format', (req, res) => {
   const rows = listRecords();

@@ -10,6 +10,7 @@ export default function App() {
   const [query, setQuery] = useState('Toronto'); const [weather, setWeather] = useState(null);
   const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [records, setRecords] = useState([]);
   const [range, setRange] = useState({ location: 'Toronto', startDate: localDate(0), endDate: localDate(4), notes: '' });
+  const [editing, setEditing] = useState(null);
   const [tab, setTab] = useState('weather');
   const loadRecords = () => api('/api/records').then(setRecords).catch(e => setError(e.message));
   useEffect(() => { search('Toronto'); loadRecords(); }, []);
@@ -24,7 +25,16 @@ export default function App() {
   }
   function currentLocation() { setError(''); if (!navigator.geolocation) return setError('Geolocation is not supported by this browser.'); navigator.geolocation.getCurrentPosition(p => search('', p.coords), e => setError(e.code === 1 ? 'Location permission was denied. Search for a city instead.' : 'Your location could not be detected.')); }
   async function save(e) { e.preventDefault(); setLoading(true); setError(''); try { await api('/api/records', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(range) }); await loadRecords(); setTab('saved'); } catch(e) { setError(e.message); } finally { setLoading(false); } }
-  async function edit(r) { const notes = prompt('Update notes:', r.notes || ''); if (notes === null) return; try { await api(`/api/records/${r.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({notes}) }); loadRecords(); } catch(e) { setError(e.message); } }
+  function edit(r) { setEditing({ id: r.id, location: r.location, startDate: r.startDate, endDate: r.endDate, notes: r.notes || '' }); }
+  async function saveEdit(e) {
+    e.preventDefault();
+    setLoading(true); setError('');
+    try {
+      await api(`/api/records/${editing.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ startDate: editing.startDate, endDate: editing.endDate, notes: editing.notes }) });
+      await loadRecords();
+      setEditing(null);
+    } catch(e) { setError(e.message); } finally { setLoading(false); }
+  }
   async function remove(id) { if (!confirm('Delete this saved weather request?')) return; try { await api(`/api/records/${id}`, {method:'DELETE'}); loadRecords(); } catch(e) { setError(e.message); } }
   const mapUrl = useMemo(() => weather && `https://www.openstreetmap.org/?mlat=${weather.location.latitude}&mlon=${weather.location.longitude}#map=10/${weather.location.latitude}/${weather.location.longitude}`, [weather]);
   return <>
@@ -39,5 +49,16 @@ export default function App() {
     {tab==='saved' && <section><div className="sectionTitle"><div><p className="eyebrow">SQLITE PERSISTENCE</p><h1>Saved weather requests</h1></div><div><a className="button" href="/api/export.csv">Export CSV</a> <a className="button secondary" href="/api/export.json">Export JSON</a></div></div>{records.length===0?<p className="empty">No requests saved yet.</p>:<div className="tableWrap"><table><thead><tr><th>Location</th><th>Date range</th><th>Forecast summary</th><th>Notes</th><th>Saved</th><th>Actions</th></tr></thead><tbody>{records.map(r=>{ const summary = r.weatherSummary; const label = summary?.dayCount === 1 ? 'Day' : 'Average'; return <tr key={r.id}><td><b>{r.location}</b><small>{r.latitude.toFixed(2)}, {r.longitude.toFixed(2)}</small></td><td>{r.startDate}<br/>to {r.endDate}</td><td>{summary ? <div className="weatherSummary"><b>{label} conditions</b><small>Temp {formatMetric(summary.averageTemperature, '°C', 1)}</small><small>Humidity {formatMetric(summary.averageHumidity, '%')}</small><small>Wind {formatMetric(summary.averageWindSpeed, ' km/h', 1)}</small></div> : <small>Metrics are available for newly saved requests.</small>}</td><td>{r.notes||'—'}</td><td>{new Date(r.createdAt).toLocaleString()}</td><td><button className="link" onClick={()=>edit(r)}>Edit</button><button className="link danger" onClick={()=>remove(r.id)}>Delete</button></td></tr>})}</tbody></table></div>}</section>}
     {tab==='about' && <section className="about"><p className="eyebrow">ABOUT THE PROJECT</p><h1>Built by Rifat Chowdhury</h1><p>WeatherWise is a full-stack technical assessment demonstrating responsive React UI, external API integration, RESTful endpoints, validation, SQLite CRUD operations, graceful error handling, and data export.</p><h2>Product Manager Accelerator</h2><p>Product Manager Accelerator is a professional development community focused on helping people grow product-management skills through practical learning, mentorship, and career support.</p><p><a href="https://www.linkedin.com/company/product-manager-accelerator/" target="_blank">Visit Product Manager Accelerator on LinkedIn ↗</a></p><h2>Data sources</h2><p>Weather and geocoding: Open-Meteo. Maps: OpenStreetMap. No API key is required.</p></section>}
     </main><footer><span>WeatherWise · Rifat Chowdhury</span><span>Data from Open-Meteo · Maps from OpenStreetMap</span></footer>
+    {editing && <div className="modalBackdrop" role="presentation" onClick={()=>setEditing(null)}>
+      <div className="modalCard" role="dialog" aria-modal="true" aria-labelledby="edit-request-title" onClick={e=>e.stopPropagation()}>
+        <div className="modalHeader"><div><p className="eyebrow">EDIT SAVED REQUEST</p><h2 id="edit-request-title">{editing.location}</h2></div><button type="button" className="iconButton" onClick={()=>setEditing(null)} aria-label="Close edit form">×</button></div>
+        <form className="editForm" onSubmit={saveEdit}>
+          <label>Start date<input type="date" required min={localDate(0)} max={localDate(15)} value={editing.startDate} onChange={e=>setEditing({...editing,startDate:e.target.value,endDate:e.target.value > editing.endDate ? e.target.value : editing.endDate})}/></label>
+          <label>End date<input type="date" required min={editing.startDate} max={localDate(15)} value={editing.endDate} onChange={e=>setEditing({...editing,endDate:e.target.value})}/></label>
+          <label className="wide">Notes<input maxLength="300" value={editing.notes} onChange={e=>setEditing({...editing,notes:e.target.value})} placeholder="Packing reminder, trip name…"/></label>
+          <div className="modalActions"><button type="button" className="secondary" onClick={()=>setEditing(null)}>Cancel</button><button disabled={loading}>{loading ? 'Saving…' : 'Save changes'}</button></div>
+        </form>
+      </div>
+    </div>}
   </>;
 }
