@@ -34,9 +34,9 @@ app.get('/api/export.:format', (req, res) => {
   const rows = listRecords();
   if (req.params.format === 'json') { res.attachment('weather-records.json'); return res.json(rows); }
   if (req.params.format !== 'csv') return res.status(400).json({ error: 'Supported formats: csv, json.' });
-  const fields = ['id','location','latitude','longitude','startDate','endDate','notes','createdAt','updatedAt'];
+  const fields = ['id','location','latitude','longitude','startDate','endDate','averageTemperature','averageHumidity','averageWindSpeed','notes','createdAt','updatedAt'];
   const esc = v => `"${String(v ?? '').replaceAll('"', '""')}"`;
-  res.attachment('weather-records.csv').type('text/csv').send([fields.join(','), ...rows.map(r => fields.map(f => esc(r[f])).join(','))].join('\n'));
+  res.attachment('weather-records.csv').type('text/csv').send([fields.join(','), ...rows.map(r => fields.map(f => esc(r.weatherSummary?.[f] ?? r[f])).join(','))].join('\n'));
 });
 
 app.use(express.static(path.resolve('dist')));

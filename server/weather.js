@@ -70,7 +70,8 @@ export async function getWeather(place, startDate, endDate) {
   const query = new URLSearchParams({
     latitude: place.latitude, longitude: place.longitude,
     current: 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m',
-    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max',
+    daily: 'weather_code,temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_probability_max,sunrise,sunset,uv_index_max',
+    hourly: 'relative_humidity_2m,wind_speed_10m',
     timezone: 'auto', forecast_days: '7',
   });
   if (startDate && endDate) { query.set('start_date', startDate); query.set('end_date', endDate); query.delete('forecast_days'); }
@@ -91,16 +92,36 @@ export function weatherLabel(code) {
   return 'Mixed conditions';
 }
 
+const average = values => {
+  const valid = values.filter(Number.isFinite);
+  return valid.length ? valid.reduce((total, value) => total + value, 0) / valid.length : null;
+};
+
+function hourlyAverage(hourly, date, field) {
+  if (!hourly?.time || !hourly[field]) return null;
+  return average(hourly.time.flatMap((time, index) => time.startsWith(date) ? [hourly[field][index]] : []));
+}
+
 export function normalize(place, weather) {
   const daily = weather.daily.time.map((date, i) => ({
     date, code: weather.daily.weather_code[i], condition: weatherLabel(weather.daily.weather_code[i]),
     max: weather.daily.temperature_2m_max[i], min: weather.daily.temperature_2m_min[i],
+    averageTemperature: weather.daily.temperature_2m_mean[i],
+    averageHumidity: hourlyAverage(weather.hourly, date, 'relative_humidity_2m'),
+    averageWindSpeed: hourlyAverage(weather.hourly, date, 'wind_speed_10m'),
     precipitationChance: weather.daily.precipitation_probability_max[i],
     sunrise: weather.daily.sunrise[i], sunset: weather.daily.sunset[i], uvIndex: weather.daily.uv_index_max[i],
   }));
   return {
     location: { name: place.name, region: place.admin1 || '', country: place.country || '', latitude: place.latitude, longitude: place.longitude },
     timezone: weather.timezone, units: weather.current_units,
-    current: { ...weather.current, condition: weatherLabel(weather.current.weather_code) }, daily,
+    current: { ...weather.current, condition: weatherLabel(weather.current.weather_code) },
+    daily,
+    summary: {
+      dayCount: daily.length,
+      averageTemperature: average(daily.map(day => day.averageTemperature)),
+      averageHumidity: average(daily.map(day => day.averageHumidity)),
+      averageWindSpeed: average(daily.map(day => day.averageWindSpeed)),
+    },
   };
 }

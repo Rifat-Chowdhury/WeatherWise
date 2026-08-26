@@ -12,7 +12,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS weather_requests (
 )`);
 
 export function listRecords() {
-  return db.prepare('SELECT id, location, latitude, longitude, start_date AS startDate, end_date AS endDate, notes, created_at AS createdAt, updated_at AS updatedAt FROM weather_requests ORDER BY id DESC').all();
+  const rows = db.prepare('SELECT id, location, latitude, longitude, start_date AS startDate, end_date AS endDate, weather_json AS weatherJson, notes, created_at AS createdAt, updated_at AS updatedAt FROM weather_requests ORDER BY id DESC').all();
+  return rows.map(({ weatherJson, ...record }) => ({ ...record, weatherSummary: JSON.parse(weatherJson).summary || null }));
 }
 export function getRecord(id) {
   const row = db.prepare('SELECT * FROM weather_requests WHERE id = ?').get(id);
